@@ -71,7 +71,10 @@ if ! [ -f "${INSTALLDIR}/etc/.prepared_base" ]; then
         # Download latest Portage
         echo "  --> Downloading latest Portage..."
         # we download the latest archive with a date
-        PORTAGE_LATEST="$(curl -s -L ${GENTOO_DISTFILES}/snapshots/ | grep -o 'portage.*.tar.bz2">' | sed 's/">//g; $d' | tail -1)"
+        # Extract just the filename; the old 'portage.*.tar.bz2">' greedily
+        # grabbed extra HTML (e.g. TUNA's title="..." attribute) and corrupted the
+        # URL. Match the bare filename and take the newest.
+        PORTAGE_LATEST="$(curl -s -L ${GENTOO_DISTFILES}/snapshots/ | grep -oE 'portage-[0-9]+\.tar\.bz2' | sort -u | tail -1)"
         if [ -z "$PORTAGE_LATEST" ]; then
             echo "    --> Cannot determinate latest Portage date"
             exit 1
