@@ -113,11 +113,27 @@ EOF
     prepareChroot "${INSTALLDIR}"
     mountCache "${CACHE_DIR}" "${INSTALLDIR}"
 
-    # Prepare and sync Gentoo overlay
+    # Prepare and sync the Gentoo ebuild tree.
     mkdir -p "${INSTALLDIR}/var/db/repos/gentoo"
     mkdir -p "${INSTALLDIR}/etc/portage/repos.conf"
-    cp "${INSTALLDIR}/usr/share/portage/config/repos.conf" "${INSTALLDIR}/etc/portage/repos.conf/gentoo.conf"
-    chrootCmd "${INSTALLDIR}" "emerge --sync -q || emerge-webrsync -q"
+    # Point the tree's rsync at a China mirror (overridable). The stage3 default
+    # is rsync.gentoo.org (slow from CN); TUNA mirrors gentoo-portage over rsync.
+    GENTOO_SYNC_URI="${GENTOO_SYNC_URI:-rsync://mirrors.tuna.tsinghua.edu.cn/gentoo-portage}"
+    cat > "${INSTALLDIR}/etc/portage/repos.conf/gentoo.conf" <<EOF
+[DEFAULT]
+main-repo = gentoo
+
+[gentoo]
+location = /var/db/repos/gentoo
+sync-type = rsync
+sync-uri = ${GENTOO_SYNC_URI}
+auto-sync = yes
+EOF
+    # Prefer emerge-webrsync (unpacks the already-fetched HTTP snapshot from the
+    # mirror — no rsync daemon, no pty) and fall back to rsync only if needed.
+    # The old 'emerge --sync' hit "openpty failed: out of pty devices" in the
+    # container and pulled the whole tree over the wall.
+    chrootCmd "${INSTALLDIR}" "emerge-webrsync -q || emerge --sync -q"
 
     # Setup binary package mirror if requested
     # This is a fragile method as there no built-in Gentoo method
