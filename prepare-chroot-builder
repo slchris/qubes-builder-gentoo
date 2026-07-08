@@ -1,0 +1,68 @@
+#!/bin/bash
+# vim: set ts=4 sw=4 sts=4 et :
+
+### prepare-chroot-builder : create a builder chroot instance of Gentoo
+
+set -e
+if [ "${VERBOSE:-0}" -ge 2 ] || [ "${DEBUG:-0}" -eq 1 ]; then
+    set -x
+fi
+
+INSTALLDIR="$1"
+DISTRO="$2"
+FLAVOR="${3:-gnome}"
+
+[ -z "${CACHE_DIR}" ] && CACHE_DIR="/tmp"
+
+TEMPLATE_CONTENT_DIR=${GENTOO_PLUGIN_DIR}scripts
+export INSTALLDIR TEMPLATE_CONTENT_DIR
+
+# shellcheck source=scripts/distribution.sh
+. ${TEMPLATE_CONTENT_DIR}/distribution.sh
+
+if ! [ -d "${INSTALLDIR}/home/user" ]; then
+    mkdir -p "$INSTALLDIR"
+
+    "${GENTOO_PLUGIN_DIR}/prepare-chroot-base" "$INSTALLDIR" "$DISTRO" "$FLAVOR"
+
+    [ -n "$SUDO_UID" ] && USER_OPTS="-u ${SUDO_UID}"
+    [ -n "$USER_UID" ] && USER_OPTS="-u ${USER_UID}"
+    if [ -n "$USER_GID" ]; then
+        /usr/sbin/chroot "$INSTALLDIR" /usr/sbin/groupadd -g "$USER_GID" user
+    elif [ -n "$SUDO_GID" ]; then
+        /usr/sbin/chroot "$INSTALLDIR" /usr/sbin/groupadd -g "$SUDO_GID" user
+    else
+        /usr/sbin/chroot "$INSTALLDIR" /usr/sbin/groupadd user
+    fi
+    /usr/sbin/chroot "$INSTALLDIR" /bin/bash -c \
+        "useradd -g user -G wheel $USER_OPTS -m user; su -c 'mkdir qubes-src' - user"
+
+    mkdir -p "${INSTALLDIR}/etc/sudoers.d"
+
+    cat > "${INSTALLDIR}/etc/sudoers.d/qubes-builder-user" <<EOF
+%wheel ALL=(ALL) NOPASSWD: ALL
+EOF
+
+    if ! [ -r "${INSTALLDIR}"/tmp/qubes-packages-mirror-repo/.mnt ]; then
+        mkdir -p "${BUILDER_REPO_DIR}" "${INSTALLDIR}"/tmp/qubes-packages-mirror-repo
+        mount --bind "${BUILDER_REPO_DIR}" "${INSTALLDIR}/tmp/qubes-packages-mirror-repo"
+    fi
+fi
+
+# Mount dev/proc/sys
+prepareChroot "${INSTALLDIR}"
+
+# Mount local cache as Portage binpkgs and distfiles
+mountCache "${CACHE_DIR}" "${INSTALLDIR}"
+
+# Standard Gentoo flags
+setupBaseFlags "${INSTALLDIR}" "${FLAVOR}"
+
+# Qubes Gentoo flags
+setupQubesFlags "${INSTALLDIR}" "${FLAVOR}"
+
+# Select profile
+setPortageProfile "${INSTALLDIR}" "${FLAVOR}"
+
+# Ensure chroot is up to date
+updateChroot "${INSTALLDIR}"

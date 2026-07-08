@@ -1,0 +1,163 @@
+#!/bin/bash
+# vim: set ts=4 sw=4 sts=4 et :
+
+### prepare-chroot-base : create a base chroot instance of Gentoo
+
+set -e
+if [ "$VERBOSE" -ge 2 ] || [ "$DEBUG" -gt 0 ]; then
+    set -x
+fi
+
+INSTALLDIR="$1"
+DISTRO="$2"
+FLAVOR="${3:-gnome}"
+
+[ -z "${CACHE_DIR}" ] && CACHE_DIR="/tmp"
+mkdir -p "${CACHE_DIR}"
+
+# GPG_KEYRING="$(readlink -f ${CACHE_DIR}/gentoo-trustedkeys.gpg)"
+# GPG_OPTS="--no-default-keyring --keyring $GPG_KEYRING"
+GPG_OPTS=""
+
+# shellcheck source=scripts/distribution.sh
+. ${TEMPLATE_CONTENT_DIR}/distribution.sh
+
+if ! [ -f "${INSTALLDIR}/etc/.prepared_base" ]; then
+    STAGE_FLAVOR="latest-stage3-amd64-systemd"
+    GENTOO_DISTFILES="${GENTOO_DISTFILES:-http://distfiles.gentoo.org}"
+
+    STAGE_DIR="${CACHE_DIR}/stage"
+    PORTAGE_DIR="${CACHE_DIR}/portage"
+
+    echo "  --> Importing Gentoo keys..."
+    gpg $GPG_OPTS --import "${TEMPLATE_CONTENT_DIR}/../keys/gentoo-release.asc.20250806"
+
+    ## STAGE3
+    if ! [ -f "${INSTALLDIR}/etc/.extracted_stage3" ]; then
+        # Get info about latest Gentoo stage3
+        STAGE_INFO="${GENTOO_DISTFILES}/releases/amd64/autobuilds/${STAGE_FLAVOR}.txt"
+        wget -q -N -P "${STAGE_DIR}" "${STAGE_INFO}"
+
+        # Extract stage3 URL and name
+        STAGE_BASEURL="${GENTOO_DISTFILES}/releases/amd64/autobuilds"
+        STAGE_URL="${STAGE_BASEURL}/$(sed -n '6p' ${STAGE_DIR}/${STAGE_FLAVOR}.txt | awk '{print $1}')"
+        STAGE_FILE="$(basename "${STAGE_URL}")"
+
+        # Download the stage3
+        echo "  --> Downloading Gentoo $DISTRO stage3..."
+        wget -q -N -P "${STAGE_DIR}" "${STAGE_URL}"{,.DIGESTS}
+
+        echo "  --> Verifying Gentoo $DISTRO stage3..."
+        pushd "$STAGE_DIR" || exit 1
+        if ! gpg $GPG_OPTS --verify "$STAGE_FILE.DIGESTS"; then
+            echo "    --> Wrong signature for $STAGE_FILE"
+            exit 1
+        fi
+        if ! awk '/SHA512 HASH/{getline;print}' "$STAGE_FILE.DIGESTS" | sed '/CONTENTS/d' | sha512sum -c; then
+            echo "    --> Wrong checksum for $STAGE_FILE"
+            exit 1
+        fi
+        popd
+
+        # Extract the stage3
+        echo "  --> Extracting Gentoo $DISTRO stage3..."
+        tar Jxfp "${STAGE_DIR}/${STAGE_FILE}" -C "${INSTALLDIR}" --xattrs-include='*.*' --numeric-owner
+
+        touch "${INSTALLDIR}/etc/.extracted_stage3"
+    fi
+
+    ## PORTAGE
+    if ! [ -f "${INSTALLDIR}/etc/.extracted_portage" ]; then
+        # Download latest Portage
+        echo "  --> Downloading latest Portage..."
+        # we download the latest archive with a date
+        PORTAGE_LATEST="$(curl -s -L http://distfiles.gentoo.org/snapshots/ | grep -o 'portage.*.tar.bz2">' | sed 's/">//g; $d' | tail -1)"
+        if [ -z "$PORTAGE_LATEST" ]; then
+            echo "    --> Cannot determinate latest Portage date"
+            exit 1
+        fi
+        PORTAGE_URL="${GENTOO_DISTFILES}/snapshots/${PORTAGE_LATEST}"
+        wget -q -P "${PORTAGE_DIR}" "${PORTAGE_URL}"{,.gpgsig,.md5sum}
+
+        echo "  --> Verifying latest Portage..."
+        pushd "$PORTAGE_DIR" || exit 1
+        if ! gpg $GPG_OPTS --verify "${PORTAGE_LATEST}.gpgsig" "${PORTAGE_LATEST}"; then
+            echo "    --> Wrong signature for ${PORTAGE_LATEST}"
+            exit 1
+        fi
+        if ! md5sum -c "${PORTAGE_LATEST}.md5sum"; then
+            echo "    --> Wrong checksum for ${PORTAGE_LATEST}"
+            exit 1
+        fi
+        popd
+
+        # Extract Portage
+        echo "  --> Extracting latest Portage..."
+        tar xfp "${PORTAGE_DIR}/${PORTAGE_LATEST}" -C "${INSTALLDIR}/usr"
+
+        # Configure Portage
+        echo "  --> Configuring Portage..."
+        mkdir -p "${INSTALLDIR}/usr/portage/distfiles"
+        mkdir -p "${INSTALLDIR}/usr/portage/packages"
+        cat >> "${INSTALLDIR}/etc/portage/make.conf" << EOF
+ACCEPT_KEYWORDS="amd64"
+ACCEPT_LICENSE="*"
+VIDEO_CARDS=""
+EOF
+        touch "${INSTALLDIR}/etc/.extracted_portage"
+    fi
+
+    prepareChroot "${INSTALLDIR}"
+    mountCache "${CACHE_DIR}" "${INSTALLDIR}"
+
+    # Prepare and sync Gentoo overlay
+    mkdir -p "${INSTALLDIR}/var/db/repos/gentoo"
+    mkdir -p "${INSTALLDIR}/etc/portage/repos.conf"
+    cp "${INSTALLDIR}/usr/share/portage/config/repos.conf" "${INSTALLDIR}/etc/portage/repos.conf/gentoo.conf"
+    chrootCmd "${INSTALLDIR}" "emerge --sync -q || emerge-webrsync -q"
+
+    # Setup binary package mirror if requested
+    # This is a fragile method as there no built-in Gentoo method
+    # for verifying binary packages hosts. It serves only to check
+    # mirror owner before adding it into the system. Once added,
+    # nothing will prevent emerging a package if the content
+    # has changed since the first check.
+    # GENTOO_MIRROR=https://gentoo.notset.fr/repo/standard/gnome+9FA64B92F95E706BF28E2CA6484010B5CDC576E2
+    if [ -n "${GENTOO_MIRROR}" ]; then
+        GENTOO_MIRROR_KEY="$(echo "${GENTOO_MIRROR}"+ | cut -d '+' -f2)"
+        GENTOO_MIRROR="$(echo "${GENTOO_MIRROR}"+ | cut -d '+' -f1)"
+        if [ -n "${GENTOO_MIRROR_KEY}" ]; then
+            if [ -e "${TEMPLATE_CONTENT_DIR}/../keys/${GENTOO_MIRROR_KEY}.asc" ]; then
+                gpg $GPG_OPTS --import "${TEMPLATE_CONTENT_DIR}/../keys/${GENTOO_MIRROR_KEY}.asc"
+                wget -q -P "${CACHE_DIR}" "${GENTOO_MIRROR}/${FLAVOR}"/Packages{,.gpgsig}
+                pushd "${CACHE_DIR}" || exit 1
+                if ! gpg $GPG_OPTS --verify Packages.gpgsig Packages; then
+                    echo "    --> Wrong signature for ${GENTOO_MIRROR}/${FLAVOR}/Packages"
+                    exit 1
+                fi
+                popd
+            else
+                echo "Cannot find key ${GENTOO_MIRROR_KEY}.asc in builder-gentoo."
+                exit 1
+            fi
+        fi
+        cat >> "${INSTALLDIR}/etc/portage/make.conf" << EOF
+FEATURES="\$FEATURES getbinpkg"
+PORTAGE_BINHOST="${GENTOO_MIRROR}/${FLAVOR}"
+EOF
+    fi
+
+    # See https://forums.gentoo.org/viewtopic-p-8636878.html?sid=abbdb9e370551ba0e1c919fe08a6d5e0#8636878
+    chrootCmd "${INSTALLDIR}" 'USE="-truetype" emerge --oneshot freetype harfbuzz'
+    chrootCmd "${INSTALLDIR}" 'USE="truetype harfbuzz" emerge --oneshot freetype harfbuzz'
+    echo "media-libs/freetype harfbuzz" > "${INSTALLDIR}/etc/portage/package.use/freetype"
+
+    # Install needed dependencies
+    pkgs="fakeroot sudo lsb-release"
+    chrootCmd "${INSTALLDIR}" "emerge ${EMERGE_OPTS} -n $pkgs"
+
+    # Use app-alternatives
+    chrootCmd "${INSTALLDIR}" "emerge ${EMERGE_OPTS} app-alternatives/{awk,bc,bzip2,cpio,gzip,lex,sh,tar,yacc}"
+
+    touch "${INSTALLDIR}/etc/.prepared_base"
+fi

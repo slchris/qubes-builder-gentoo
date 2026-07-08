@@ -1,0 +1,26 @@
+# X
+x11-apps/xprop
+x11-apps/xsetroot
+x11-apps/xrandr
+x11-apps/setxkbmap
+x11-terms/xterm
+
+# Basic utils
+app-admin/sudo
+app-editors/vim
+dev-vcs/git
+net-misc/wget
+sys-apps/diffutils
+sys-apps/ethtool
+sys-block/parted
+
+# Applications
+www-client/firefox
+mail-client/thunderbird
+
+# XFCE
+x11-themes/adwaita-icon-theme
+x11-themes/gnome-themes-standard
+x11-terms/xfce4-terminal
+xfce-base/thunar
+xfce-base/xfce4-settings
