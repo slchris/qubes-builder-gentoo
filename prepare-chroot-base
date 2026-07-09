@@ -167,8 +167,18 @@ EOF
     fi
 
     # See https://forums.gentoo.org/viewtopic-p-8636878.html?sid=abbdb9e370551ba0e1c919fe08a6d5e0#8636878
-    chrootCmd "${INSTALLDIR}" 'USE="-truetype" emerge --oneshot freetype harfbuzz'
-    chrootCmd "${INSTALLDIR}" 'USE="truetype harfbuzz" emerge --oneshot freetype harfbuzz'
+    # Keep this circular-dep workaround minimal: harfbuzz's 'test' USE drags in a
+    # whole graphics/python stack (pillow, eigen, pybind11, scikit-build-core...),
+    # and pillow-12.3.0 currently fails to build on Python 3.14. gentoo-minimal
+    # doesn't need any of it — disable test everywhere and turn off harfbuzz's
+    # heavy optional USE flags for this bootstrap emerge.
+    mkdir -p "${INSTALLDIR}/etc/portage/package.use"
+    echo 'media-libs/harfbuzz -test -icu -graphite -introspection -doc' \
+        > "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
+    echo 'media-libs/freetype -test' \
+        >> "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
+    chrootCmd "${INSTALLDIR}" 'FEATURES="-test" USE="-truetype" emerge --oneshot freetype harfbuzz'
+    chrootCmd "${INSTALLDIR}" 'FEATURES="-test" USE="truetype harfbuzz" emerge --oneshot freetype harfbuzz'
     echo "media-libs/freetype harfbuzz" > "${INSTALLDIR}/etc/portage/package.use/freetype"
 
     # Install needed dependencies
