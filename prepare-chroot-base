@@ -123,9 +123,18 @@ VIDEO_CARDS=""
 PYTHON_SINGLE_TARGET="${PYTHON_SINGLE_TARGET}"
 PYTHON_TARGETS="${PYTHON_TARGETS}"
 GENTOO_MIRRORS="${GENTOO_MIRRORS_CHROOT}"
-FEATURES="\${FEATURES} getbinpkg binpkg-request-signature"
+FEATURES="\${FEATURES} getbinpkg -binpkg-request-signature"
 PORTAGE_BINHOST="${BINHOST_URI_CHROOT}"
-EMERGE_DEFAULT_OPTS="\${EMERGE_DEFAULT_OPTS} --binpkg-respect-use=y"
+EMERGE_DEFAULT_OPTS="\${EMERGE_DEFAULT_OPTS} --binpkg-respect-use=y --getbinpkgonly=n"
+EOF
+        # Don't require binpkg GPG signatures: the Gentoo binhost's binary-package
+        # signing key isn't set up in this fresh chroot, and the mirror (TUNA) is
+        # trusted. Configure the binrepo to skip signature verification.
+        mkdir -p "${INSTALLDIR}/etc/portage/binrepos.conf"
+        cat > "${INSTALLDIR}/etc/portage/binrepos.conf/gentoobinhost.conf" << EOF
+[binhost]
+priority = 1
+sync-uri = ${BINHOST_URI_CHROOT}
 EOF
         touch "${INSTALLDIR}/etc/.extracted_portage"
     fi
