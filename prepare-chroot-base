@@ -176,9 +176,15 @@ EOF
     # dev-python/docutils -> dev-python/pillow, and pillow fails on Python 3.14.
     # gentoo-minimal doesn't need glib/introspection/docs in harfbuzz for this
     # bootstrap, so cut the whole chain with -glib (plus the other heavy USE).
+    # Multiple harfbuzz USE flags route to glib -> docutils -> pillow (Python 3.14
+    # build failure): harfbuzz[glib] directly, and harfbuzz[cairo] -> cairo[glib].
+    # Turn OFF every optional harfbuzz USE for this bootstrap so nothing pulls the
+    # glib/docutils/pillow stack; gentoo-minimal needs only the bare truetype path.
     mkdir -p "${INSTALLDIR}/etc/portage/package.use"
-    echo 'media-libs/harfbuzz -glib -test -icu -graphite -introspection -doc' \
+    echo 'media-libs/harfbuzz -glib -cairo -test -icu -graphite -introspection -doc' \
         > "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
+    echo 'x11-libs/cairo -glib' \
+        >> "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
     echo 'media-libs/freetype -test' \
         >> "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
     # pillow-12.3.0 fails to build on the stage3's Python 3.14 and is only pulled
