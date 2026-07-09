@@ -150,7 +150,11 @@ setupQubesOverlay() {
     # Tunables come from config/build.conf (sourced by the top-level build script);
     # fall back to sane defaults so this function also works standalone.
     OVERLAY_SOURCE="${OVERLAY_SOURCE:-local}"
-    OVERLAY_TARBALL="${OVERLAY_TARBALL:-/tmp/qubes-gentoo-overlay.tar.gz}"
+    # Default to the overlay tarball shipped INSIDE this component's sources, so
+    # it rides along when builderv2 fetches builder-gentoo into the container
+    # (the container can't see the builder host's /tmp). TEMPLATE_CONTENT_DIR is
+    # the builder-gentoo scripts dir inside the container.
+    OVERLAY_TARBALL="${OVERLAY_TARBALL:-${TEMPLATE_CONTENT_DIR}/../overlay/qubes-gentoo-overlay.tar.gz}"
     OVERLAY_GIT_URI="${OVERLAY_GIT_URI:-https://github.com/slchris/qubes-gentoo.git}"
 
     rm -rf "${CHROOT_DIR}/var/db/repos/qubes"
