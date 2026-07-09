@@ -177,6 +177,14 @@ EOF
         > "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
     echo 'media-libs/freetype -test' \
         >> "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
+    # pillow-12.3.0 fails to build on the stage3's Python 3.14 and is only pulled
+    # transitively here (not needed by gentoo-minimal). Mask the broken version so
+    # portage falls back to an older, buildable pillow (or drops it). Build only
+    # freetype+harfbuzz and their DIRECT deps (--onlydeps-with-rdeps=n keeps the
+    # closure tight; --deep is off) with tests disabled.
+    mkdir -p "${INSTALLDIR}/etc/portage/package.mask"
+    echo '=dev-python/pillow-12.3.0' \
+        > "${INSTALLDIR}/etc/portage/package.mask/00-pillow-py314"
     chrootCmd "${INSTALLDIR}" 'FEATURES="-test" USE="-truetype" emerge --oneshot freetype harfbuzz'
     chrootCmd "${INSTALLDIR}" 'FEATURES="-test" USE="truetype harfbuzz" emerge --oneshot freetype harfbuzz'
     echo "media-libs/freetype harfbuzz" > "${INSTALLDIR}/etc/portage/package.use/freetype"
