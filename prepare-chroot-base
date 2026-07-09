@@ -182,8 +182,13 @@ EOF
     # portage falls back to an older, buildable pillow (or drops it). Build only
     # freetype+harfbuzz and their DIRECT deps (--onlydeps-with-rdeps=n keeps the
     # closure tight; --deep is off) with tests disabled.
+    # pillow (any version) currently fails to build on the stage3's Python 3.14
+    # (distutils_pep517_install wheel build dies). It's only a TRANSITIVE dep of
+    # this bootstrap, not needed by gentoo-minimal. Mask the whole package so
+    # portage either drops it or names the real requiring package at dep-resolve
+    # time (then we disable that USE instead).
     mkdir -p "${INSTALLDIR}/etc/portage/package.mask"
-    echo '=dev-python/pillow-12.3.0' \
+    echo 'dev-python/pillow' \
         > "${INSTALLDIR}/etc/portage/package.mask/00-pillow-py314"
     chrootCmd "${INSTALLDIR}" 'FEATURES="-test" USE="-truetype" emerge --oneshot freetype harfbuzz'
     chrootCmd "${INSTALLDIR}" 'FEATURES="-test" USE="truetype harfbuzz" emerge --oneshot freetype harfbuzz'
