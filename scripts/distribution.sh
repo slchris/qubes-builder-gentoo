@@ -174,8 +174,12 @@ setupQubesOverlay() {
 location = /var/db/repos/qubes
 auto-sync = no
 EOF
-        # Regenerate Manifests inside the chroot (vendored ones were dropped).
-        chrootCmd "${CHROOT_DIR}" "cd /var/db/repos/qubes && (command -v pkgdev >/dev/null && for d in */*/; do pkgdev manifest \"\$d\" 2>/dev/null || true; done) || true"
+        # Regenerate Manifests (the vendored ones were dropped). Without them
+        # portage rejects the ebuilds as "masked by: corruption". Use portage's
+        # OWN 'ebuild <ebuild> manifest' (always present; pkgdev may not be) on one
+        # ebuild per package. layout.conf sets thin-manifests (these are git-r3
+        # ebuilds with no DIST files), so this just writes the EBUILD hashes.
+        chrootCmd "${CHROOT_DIR}" "export FEATURES=\"-getbinpkg\"; for e in /var/db/repos/qubes/*/*/*.ebuild; do ebuild \"\$e\" manifest 2>/dev/null || true; done; echo manifests-regenerated"
     else
         # git mode — for machines that DO have GitHub access.
         echo "  --> Syncing Qubes overlay from ${OVERLAY_GIT_URI}"
