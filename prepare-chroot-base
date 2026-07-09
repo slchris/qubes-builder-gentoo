@@ -172,8 +172,12 @@ EOF
     # and pillow-12.3.0 currently fails to build on Python 3.14. gentoo-minimal
     # doesn't need any of it — disable test everywhere and turn off harfbuzz's
     # heavy optional USE flags for this bootstrap emerge.
+    # harfbuzz's 'glib' USE is the real culprit: harfbuzz[glib] -> dev-libs/glib ->
+    # dev-python/docutils -> dev-python/pillow, and pillow fails on Python 3.14.
+    # gentoo-minimal doesn't need glib/introspection/docs in harfbuzz for this
+    # bootstrap, so cut the whole chain with -glib (plus the other heavy USE).
     mkdir -p "${INSTALLDIR}/etc/portage/package.use"
-    echo 'media-libs/harfbuzz -test -icu -graphite -introspection -doc' \
+    echo 'media-libs/harfbuzz -glib -test -icu -graphite -introspection -doc' \
         > "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
     echo 'media-libs/freetype -test' \
         >> "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
