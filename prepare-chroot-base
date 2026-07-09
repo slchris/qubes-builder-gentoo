@@ -102,10 +102,21 @@ if ! [ -f "${INSTALLDIR}/etc/.prepared_base" ]; then
         echo "  --> Configuring Portage..."
         mkdir -p "${INSTALLDIR}/usr/portage/distfiles"
         mkdir -p "${INSTALLDIR}/usr/portage/packages"
+        # Python target: pin to python3_13, Gentoo's DEFAULT stable interpreter.
+        # python3_14 is stable-but-not-default and still in transition (its build
+        # toolchain isn't fully settled), which makes packages like pillow fail
+        # their PEP517 wheel build. Using 3.13 (the official default) is "following
+        # upstream", not downgrading — 3.14 stays available in PYTHON_TARGETS.
+        PYTHON_SINGLE_TARGET="${PYTHON_SINGLE_TARGET:-python3_13}"
+        PYTHON_TARGETS="${PYTHON_TARGETS:-python3_13 python3_14}"
+        GENTOO_MIRRORS_CHROOT="${GENTOO_MIRRORS:-https://mirrors.tuna.tsinghua.edu.cn/gentoo}"
         cat >> "${INSTALLDIR}/etc/portage/make.conf" << EOF
 ACCEPT_KEYWORDS="amd64"
 ACCEPT_LICENSE="*"
 VIDEO_CARDS=""
+PYTHON_SINGLE_TARGET="${PYTHON_SINGLE_TARGET}"
+PYTHON_TARGETS="${PYTHON_TARGETS}"
+GENTOO_MIRRORS="${GENTOO_MIRRORS_CHROOT}"
 EOF
         touch "${INSTALLDIR}/etc/.extracted_portage"
     fi
@@ -167,41 +178,11 @@ EOF
     fi
 
     # See https://forums.gentoo.org/viewtopic-p-8636878.html?sid=abbdb9e370551ba0e1c919fe08a6d5e0#8636878
-    # Keep this circular-dep workaround minimal: harfbuzz's 'test' USE drags in a
-    # whole graphics/python stack (pillow, eigen, pybind11, scikit-build-core...),
-    # and pillow-12.3.0 currently fails to build on Python 3.14. gentoo-minimal
-    # doesn't need any of it — disable test everywhere and turn off harfbuzz's
-    # heavy optional USE flags for this bootstrap emerge.
-    # harfbuzz's 'glib' USE is the real culprit: harfbuzz[glib] -> dev-libs/glib ->
-    # dev-python/docutils -> dev-python/pillow, and pillow fails on Python 3.14.
-    # gentoo-minimal doesn't need glib/introspection/docs in harfbuzz for this
-    # bootstrap, so cut the whole chain with -glib (plus the other heavy USE).
-    # Multiple harfbuzz USE flags route to glib -> docutils -> pillow (Python 3.14
-    # build failure): harfbuzz[glib] directly, and harfbuzz[cairo] -> cairo[glib].
-    # Turn OFF every optional harfbuzz USE for this bootstrap so nothing pulls the
-    # glib/docutils/pillow stack; gentoo-minimal needs only the bare truetype path.
-    mkdir -p "${INSTALLDIR}/etc/portage/package.use"
-    echo 'media-libs/harfbuzz -glib -cairo -test -icu -graphite -introspection -doc' \
-        > "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
-    echo 'x11-libs/cairo -glib' \
-        >> "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
-    echo 'media-libs/freetype -test' \
-        >> "${INSTALLDIR}/etc/portage/package.use/00-harfbuzz-bootstrap"
-    # pillow-12.3.0 fails to build on the stage3's Python 3.14 and is only pulled
-    # transitively here (not needed by gentoo-minimal). Mask the broken version so
-    # portage falls back to an older, buildable pillow (or drops it). Build only
-    # freetype+harfbuzz and their DIRECT deps (--onlydeps-with-rdeps=n keeps the
-    # closure tight; --deep is off) with tests disabled.
-    # pillow (any version) currently fails to build on the stage3's Python 3.14
-    # (distutils_pep517_install wheel build dies). It's only a TRANSITIVE dep of
-    # this bootstrap, not needed by gentoo-minimal. Mask the whole package so
-    # portage either drops it or names the real requiring package at dep-resolve
-    # time (then we disable that USE instead).
-    mkdir -p "${INSTALLDIR}/etc/portage/package.mask"
-    echo 'dev-python/pillow' \
-        > "${INSTALLDIR}/etc/portage/package.mask/00-pillow-py314"
-    chrootCmd "${INSTALLDIR}" 'FEATURES="-test" USE="-truetype" emerge --oneshot freetype harfbuzz'
-    chrootCmd "${INSTALLDIR}" 'FEATURES="-test" USE="truetype harfbuzz" emerge --oneshot freetype harfbuzz'
+    # freetype<->harfbuzz circular-dep bootstrap (upstream). With PYTHON_SINGLE_TARGET
+    # pinned to python3_13 above, the glib->docutils->pillow chain builds cleanly, so
+    # no USE-flag surgery is needed here anymore — this is the upstream form.
+    chrootCmd "${INSTALLDIR}" 'USE="-truetype" emerge --oneshot freetype harfbuzz'
+    chrootCmd "${INSTALLDIR}" 'USE="truetype harfbuzz" emerge --oneshot freetype harfbuzz'
     echo "media-libs/freetype harfbuzz" > "${INSTALLDIR}/etc/portage/package.use/freetype"
 
     # Install needed dependencies
