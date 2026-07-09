@@ -142,6 +142,14 @@ EOF
     prepareChroot "${INSTALLDIR}"
     mountCache "${CACHE_DIR}" "${INSTALLDIR}"
 
+    # Make portage ITSELF run on python3.13, not the stage3 default python3.14.
+    # portage-on-3.14 has an asyncio bug (Gentoo bug 967199) — the BinpkgFetcher
+    # crashes getbinpkg with "RuntimeError: Event loop is closed / Task was
+    # destroyed but it is pending". Switching the active interpreter to 3.13
+    # (Gentoo's default) makes emerge/portage run cleanly. || true: python3.13
+    # must already be in the stage3 (it is).
+    chrootCmd "${INSTALLDIR}" "eselect python set python3.13 || eselect python set --python3 python3.13 || true"
+
     # Prepare and sync the Gentoo ebuild tree.
     mkdir -p "${INSTALLDIR}/var/db/repos/gentoo"
     mkdir -p "${INSTALLDIR}/etc/portage/repos.conf"
