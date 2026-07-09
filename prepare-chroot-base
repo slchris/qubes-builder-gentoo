@@ -110,6 +110,12 @@ if ! [ -f "${INSTALLDIR}/etc/.prepared_base" ]; then
         PYTHON_SINGLE_TARGET="${PYTHON_SINGLE_TARGET:-python3_13}"
         PYTHON_TARGETS="${PYTHON_TARGETS:-python3_13 python3_14}"
         GENTOO_MIRRORS_CHROOT="${GENTOO_MIRRORS:-https://mirrors.tuna.tsinghua.edu.cn/gentoo}"
+        # Binary host: pull prebuilt packages from the China mirror instead of
+        # compiling everything. This dodges packages whose from-source build is
+        # currently broken on the latest tree (e.g. pillow's PEP517 wheel build)
+        # AND massively speeds up the whole template build. The binpkgs are
+        # GPG-signed by the Gentoo release key (imported above).
+        BINHOST_URI_CHROOT="${BINHOST_URI:-https://mirrors.tuna.tsinghua.edu.cn/gentoo/releases/amd64/binpackages/23.0/x86-64}"
         cat >> "${INSTALLDIR}/etc/portage/make.conf" << EOF
 ACCEPT_KEYWORDS="amd64"
 ACCEPT_LICENSE="*"
@@ -117,6 +123,9 @@ VIDEO_CARDS=""
 PYTHON_SINGLE_TARGET="${PYTHON_SINGLE_TARGET}"
 PYTHON_TARGETS="${PYTHON_TARGETS}"
 GENTOO_MIRRORS="${GENTOO_MIRRORS_CHROOT}"
+FEATURES="\${FEATURES} getbinpkg binpkg-request-signature"
+PORTAGE_BINHOST="${BINHOST_URI_CHROOT}"
+EMERGE_DEFAULT_OPTS="\${EMERGE_DEFAULT_OPTS} --binpkg-respect-use=y"
 EOF
         touch "${INSTALLDIR}/etc/.extracted_portage"
     fi
