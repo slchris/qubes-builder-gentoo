@@ -150,6 +150,23 @@ EOF
     # must already be in the stage3 (it is).
     chrootCmd "${INSTALLDIR}" "eselect python set python3.13 || eselect python set --python3 python3.13 || true"
 
+    # The build node has NO proxy and can't reach github.com, but the qubes
+    # component ebuilds fetch their source via git-r3 from github. Ship the
+    # component source repos as local git mirrors (packaged on the dev box, in
+    # this component's mirror/ dir) and redirect github.com/QubesOS/ to them via
+    # git's insteadOf, so git-r3 clones locally with no network.
+    QUBES_SRC_MIRROR_TARBALL="${QUBES_SRC_MIRROR_TARBALL:-${TEMPLATE_CONTENT_DIR}/../mirror/qubes-src-mirror.tar.gz}"
+    if [ -f "${QUBES_SRC_MIRROR_TARBALL}" ]; then
+        echo "  --> Installing local qubes source mirror + git insteadOf redirect"
+        mkdir -p "${INSTALLDIR}/var/cache/qubes-src-mirror"
+        # tarball contains a top-level qubes-src-mirror/ dir with *.git bare mirrors;
+        # strip it so the repos land directly under /var/cache/qubes-src-mirror.
+        tar -xzf "${QUBES_SRC_MIRROR_TARBALL}" -C "${INSTALLDIR}/var/cache/qubes-src-mirror" --strip-components=1
+        # git-r3 does 'git ls-remote https://github.com/QubesOS/<repo>.git' etc.;
+        # rewrite that prefix to the local mirror path (bare repos named <repo>.git).
+        chrootCmd "${INSTALLDIR}" "git config --system url.\"/var/cache/qubes-src-mirror/\".insteadOf \"https://github.com/QubesOS/\""
+    fi
+
     # Prepare and sync the Gentoo ebuild tree.
     mkdir -p "${INSTALLDIR}/var/db/repos/gentoo"
     mkdir -p "${INSTALLDIR}/etc/portage/repos.conf"
