@@ -1,0 +1,8 @@
+# Belt-and-braces: block the source Haskell pandoc stack so nothing (including
+# autounmask) can pull dev-lang/ghc for a multi-hour build. qubes-core-* use the
+# pandoc-bin USE (see package.use/xfce-qubes) to get the prebuilt pandoc instead.
+# If a package genuinely needs source pandoc, this mask will surface it as an
+# error rather than silently compiling GHC.
+dev-lang/ghc
+app-text/pandoc
+app-text/pandoc-cli

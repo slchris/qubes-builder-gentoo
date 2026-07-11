@@ -1,2 +1,7 @@
-app-emulation/qubes-core-agent-linux networking network-manager passwordless-root
+# pandoc-bin: use the prebuilt pandoc for man-page generation. WITHOUT this USE,
+# qubes-core-agent-linux/qubes-core-qrexec pull app-text/pandoc (source, Haskell),
+# which drags in dev-lang/ghc and pandoc-cli[server] — a multi-hour GHC build.
+# minimal-qubes already sets these; xfce-qubes was missing them.
+app-emulation/qubes-core-agent-linux networking network-manager passwordless-root pandoc-bin
+app-emulation/qubes-core-qrexec pandoc-bin
 app-emulation/qubes-gui-agent xfce
