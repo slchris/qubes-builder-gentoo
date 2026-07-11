@@ -1,6 +1,13 @@
 #!/bin/bash
 
 EMERGE_OPTS="-b -k -n"
+# For the flavor package sets (installBasePackages/installQubesPackages), let
+# Portage auto-resolve USE-flag requirements instead of hand-maintaining a
+# package.use entry for every transitive dep. A desktop flavor (thunar pulling
+# gvfs -> gnome -> samba -> ngtcp2[gnutls], etc.) surfaces many such needs;
+# --autounmask-write applies them and --autounmask-continue proceeds without a
+# second invocation. Kept OFF the base @world update (that stays strict).
+EMERGE_OPTS_AUTOUNMASK="--autounmask --autounmask-use=y --autounmask-write --autounmask-continue --autounmask-backtrack=y"
 
 if [ "0${IS_LEGACY_BUILDER}" -eq 1 ]; then
     TEMPLATE_SCRIPTS_DIR="$(readlink -f .)"
@@ -203,7 +210,7 @@ installBasePackages() {
     if [ -n "${PACKAGES}" ]; then
         echo "  --> Installing Gentoo packages..."
         echo "    --> Selected packages: ${PACKAGES}"
-        chrootCmd "${CHROOT_DIR}" "emerge ${EMERGE_OPTS} ${PACKAGES}"
+        chrootCmd "${CHROOT_DIR}" "emerge ${EMERGE_OPTS} ${EMERGE_OPTS_AUTOUNMASK} ${PACKAGES}"
     fi
 }
 
@@ -215,7 +222,7 @@ installQubesPackages() {
     if [ -n "${PACKAGES}" ]; then
         echo "  --> Installing Qubes packages..."
         echo "    --> Selected packages: ${PACKAGES}"
-        chrootCmd "${CHROOT_DIR}" "emerge ${EMERGE_OPTS} ${PACKAGES}"
+        chrootCmd "${CHROOT_DIR}" "emerge ${EMERGE_OPTS} ${EMERGE_OPTS_AUTOUNMASK} ${PACKAGES}"
     fi
 }
 

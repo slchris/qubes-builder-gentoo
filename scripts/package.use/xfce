@@ -17,3 +17,8 @@ dev-db/sqlite secure-delete
 
 # required by XFCE
 dev-libs/libdbusmenu gtk3
+
+# thunar-4.20 pulls gvfs -> gnome-online-accounts -> samba -> ngtcp2, which needs
+# gnutls under the desktop/systemd profile (else "no ebuilds ... to satisfy
+# ngtcp2[gnutls]"). Enable it so the dependency resolves.
+net-libs/ngtcp2 gnutls
