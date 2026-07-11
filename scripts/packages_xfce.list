@@ -15,8 +15,10 @@ sys-apps/ethtool
 sys-block/parted
 
 # Applications
-www-client/firefox
-mail-client/thunderbird
+# Use the -bin (prebuilt) variants: building firefox/thunderbird from source
+# takes 4-8h each. The binary packages install in minutes.
+www-client/firefox-bin
+mail-client/thunderbird-bin
 
 # XFCE
 x11-themes/adwaita-icon-theme
