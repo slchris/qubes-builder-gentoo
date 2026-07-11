@@ -201,6 +201,20 @@ EOF
     # container and pulled the whole tree over the wall.
     chrootCmd "${INSTALLDIR}" "emerge-webrsync -q || emerge --sync -q"
 
+    # Set the Portage profile RIGHT AFTER the tree sync, BEFORE any emerge in this
+    # script (eselect-python, freetype/harfbuzz, the base @world below). The profile
+    # governs the merged-usr/split-usr layout and USE defaults, so if we compile
+    # anything under the stage3's built-in default profile first, those packages get
+    # the wrong layout — that's how the earlier build ended up split-usr on the
+    # (now-removed) 17.1 profile even though 02_install_groups.sh later ran
+    # setPortageProfile. Pin it here to GENTOO_PROFILE (default 23.0/desktop/systemd,
+    # a merged-usr profile matching the current merged-usr stage3). The tree must be
+    # synced first (the profile dir lives in the tree). eselect-repository/profiles
+    # exist after the sync.
+    GENTOO_PROFILE="${GENTOO_PROFILE:-default/linux/amd64/23.0/desktop/systemd}"
+    echo "  --> Selecting Portage profile early: ${GENTOO_PROFILE}"
+    chrootCmd "${INSTALLDIR}" "eselect profile set ${GENTOO_PROFILE}"
+
     # Make portage ITSELF run on python3.13, not a stage3 python3.14 default.
     # portage-on-3.14 has an asyncio bug (Gentoo bug 967199) — the BinpkgFetcher
     # crashes getbinpkg with "RuntimeError: Event loop is closed". Do this AFTER
