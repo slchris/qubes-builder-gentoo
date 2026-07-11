@@ -123,9 +123,16 @@ VIDEO_CARDS=""
 PYTHON_SINGLE_TARGET="${PYTHON_SINGLE_TARGET}"
 PYTHON_TARGETS="${PYTHON_TARGETS}"
 GENTOO_MIRRORS="${GENTOO_MIRRORS_CHROOT}"
-FEATURES="\${FEATURES} getbinpkg -binpkg-request-signature"
+FEATURES="\${FEATURES} getbinpkg -binpkg-request-signature -parallel-fetch"
 PORTAGE_BINHOST="${BINHOST_URI_CHROOT}"
 EMERGE_DEFAULT_OPTS="\${EMERGE_DEFAULT_OPTS} --binpkg-respect-use=y --getbinpkgonly=n"
+# Serialize binpkg FETCHING (not compilation). portage's BinpkgFetcher.async_unlock
+# races the asyncio event loop shutdown ("RuntimeError: Event loop is closed / Task
+# was destroyed but it is pending", Gentoo bug 967199) under parallel getbinpkg —
+# it bites even on python3.13 during the big desktop binpkg download. -parallel-fetch
+# + PORTAGE_MAX_FETCHERS=1 make the FETCH serial to dodge the race, while emerge's
+# --jobs (compilation parallelism) stays untouched so the build isn't slowed.
+PORTAGE_MAX_FETCHERS="1"
 EOF
         # Don't require binpkg GPG signatures: the Gentoo binhost's binary-package
         # signing key isn't set up in this fresh chroot, and the mirror (TUNA) is
