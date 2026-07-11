@@ -258,13 +258,21 @@ PORTAGE_BINHOST="${GENTOO_MIRROR}/${FLAVOR}"
 EOF
     fi
 
-    # See https://forums.gentoo.org/viewtopic-p-8636878.html?sid=abbdb9e370551ba0e1c919fe08a6d5e0#8636878
-    # freetype<->harfbuzz circular-dep bootstrap (upstream). With PYTHON_SINGLE_TARGET
-    # pinned to python3_13 above, the glib->docutils->pillow chain builds cleanly, so
-    # no USE-flag surgery is needed here anymore — this is the upstream form.
-    chrootCmd "${INSTALLDIR}" 'USE="-truetype" emerge --oneshot freetype harfbuzz'
-    chrootCmd "${INSTALLDIR}" 'USE="truetype harfbuzz" emerge --oneshot freetype harfbuzz'
+    # freetype<->harfbuzz have a circular dep (freetype[harfbuzz] needs harfbuzz,
+    # harfbuzz[truetype] needs freetype). The classic break is a two-step build:
+    # first harfbuzz WITHOUT truetype, then rebuild both with it. But that
+    # `USE="-truetype"` step FAILS under a desktop profile, where other packages
+    # already require harfbuzz[truetype] ("no ebuilds ... to satisfy
+    # harfbuzz[truetype]"). With getbinpkg (binhost) the prebuilt harfbuzz has no
+    # circular-dep problem, so try a plain one-shot first (binaries resolve it),
+    # and only fall back to the -truetype bootstrap if that fails (source-only
+    # minimal profile). Either way, pin the freetype[harfbuzz] USE afterwards.
     echo "media-libs/freetype harfbuzz" > "${INSTALLDIR}/etc/portage/package.use/freetype"
+    chrootCmd "${INSTALLDIR}" 'emerge --oneshot --getbinpkg freetype harfbuzz' || {
+        echo "  --> one-shot failed, falling back to -truetype bootstrap"
+        chrootCmd "${INSTALLDIR}" 'USE="-truetype" emerge --oneshot freetype harfbuzz'
+        chrootCmd "${INSTALLDIR}" 'USE="truetype harfbuzz" emerge --oneshot freetype harfbuzz'
+    }
 
     # Install needed dependencies
     pkgs="fakeroot sudo lsb-release"
