@@ -138,9 +138,23 @@ EOF
         # signing key isn't set up in this fresh chroot, and the mirror (TUNA) is
         # trusted. Configure the binrepo to skip signature verification.
         mkdir -p "${INSTALLDIR}/etc/portage/binrepos.conf"
+        # Point OUR binhost at TUNA. Crucially, ALSO override the stock
+        # `[gentoobinhost]` repo that gentoo 23.0 ships in
+        # /usr/share/portage/config/binrepos.conf — it defaults to
+        # distfiles.gentoo.org, which the no-proxy node CAN'T REACH. If a package
+        # is missing from TUNA, portage otherwise falls through to that official
+        # binhost (seen as `[gentoo]` alongside our `[binhost]`) and hangs on
+        # `distfiles.gentoo.org/.../*.gpkg.tar`. Redefine [gentoobinhost] here to
+        # TUNA too (same section name overrides the stock file), so nothing ever
+        # tries the unreachable official host; a package missing from TUNA then
+        # falls back to a SOURCE build instead of an official binpkg fetch.
         cat > "${INSTALLDIR}/etc/portage/binrepos.conf/gentoobinhost.conf" << EOF
 [binhost]
 priority = 1
+sync-uri = ${BINHOST_URI_CHROOT}
+
+[gentoobinhost]
+priority = 2
 sync-uri = ${BINHOST_URI_CHROOT}
 EOF
         touch "${INSTALLDIR}/etc/.extracted_portage"
