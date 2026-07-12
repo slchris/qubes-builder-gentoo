@@ -234,10 +234,17 @@ setPortageProfile() {
     # overridden GENTOO_PROFILE explicitly.
     local base_profile="${GENTOO_PROFILE:-default/linux/amd64/23.0/systemd}"
     local profile="${base_profile}"
-    if [ "$FLAVOR" == "xfce" ] || [ "$FLAVOR" == "gnome" ]; then
-        # Only auto-derive when the profile is still the default minimal one.
-        if [ "${base_profile}" == "default/linux/amd64/23.0/systemd" ]; then
+    # Auto-derive the desktop variant only when the caller left the profile at the
+    # default minimal one. XFCE is NOT a GNOME desktop: it must land on the plain
+    # `desktop/systemd` profile, NOT `desktop/gnome/systemd` — the gnome sub-profile
+    # pulls a GNOME-flavored USE/dep set and was why gentoo-xfce came out with the
+    # wrong profile (and without a WM/session). Only the gnome flavor gets the
+    # gnome sub-profile.
+    if [ "${base_profile}" == "default/linux/amd64/23.0/systemd" ]; then
+        if [ "$FLAVOR" == "gnome" ]; then
             profile="default/linux/amd64/23.0/desktop/gnome/systemd"
+        elif [ "$FLAVOR" == "xfce" ]; then
+            profile="default/linux/amd64/23.0/desktop/systemd"
         fi
     fi
     echo "  --> Selecting Portage profile: ${profile}"

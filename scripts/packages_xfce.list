@@ -21,8 +21,17 @@ www-client/firefox-bin
 mail-client/thunderbird-bin
 
 # XFCE
+# xfce4-session (provides `startxfce4`, the session manager) and xfwm4 (the
+# window manager) are the two components that make this an actual usable
+# desktop. They were missing before: thunar/xfce4-settings only dragged in the
+# panel + libs as deps, so gentoo-xfce came up with a panel but no WM/session
+# and could not start a desktop. List them explicitly (not xfce4-meta, which
+# also pulls screensaver/power-manager/etc. — unnecessary for a Qubes template).
 x11-themes/adwaita-icon-theme
 x11-themes/gnome-themes-standard
 x11-terms/xfce4-terminal
+xfce-base/xfce4-session
+xfce-base/xfce4-panel
+x11-wm/xfwm4
 xfce-base/thunar
 xfce-base/xfce4-settings
